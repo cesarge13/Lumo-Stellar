@@ -12,16 +12,124 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Globe, Settings, MapPin, Moon, Sun, Monitor, UserCircle } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react'
+import { Globe, Settings, MapPin, Moon, Sun, Monitor, UserCircle, Wallet, CheckCircle, LogOut } from 'lucide-react'
 import { getCountryName } from '@/services/locationService'
 import { useTheme } from '@/contexts/ThemeContext'
 import { UserRole } from '@/types'
+import { ConnectWalletModal } from '@/components/wallet/ConnectWalletModal'
+import { getFreighterConnectionStatus } from '@/services/freighterService'
+import { api } from '@/services/api'
+import { toast } from 'sonner'
 
 export default function UserMenu() {
-  const { user, logout, changeActiveRole } = useAuth()
+  const { user, logout, changeActiveRole, setUser } = useAuth()
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { theme, setTheme } = useTheme()
+  const [showWalletModal, setShowWalletModal] = useState(false)
+  const [walletStatus, setWalletStatus] = useState<{
+    isAvailable: boolean
+    isConnected: boolean
+    publicKey: string | null
+  } | null>(null)
+
+  const checkWalletStatus = useCallback(async () => {
+    const status = await getFreighterConnectionStatus()
+    
+    // Si el usuario ha desconectado manualmente (no tiene stellarAddress en su perfil),
+    // NO mostrar como conectado aunque Freighter esté conectado en la extensión
+    const userStellarAddress = user?.stellarAddress 
+      ? (typeof user.stellarAddress === 'string' ? user.stellarAddress : String(user.stellarAddress))
+      : ''
+    
+    if (!userStellarAddress) {
+      // Usuario desconectado manualmente - mostrar como desconectado
+      setWalletStatus({
+        isAvailable: status.isAvailable,
+        isConnected: false,
+        publicKey: null,
+      })
+      return
+    }
+    
+    // Usuario tiene dirección Stellar - mostrar como conectado
+    // Si Freighter está conectado y la dirección coincide, usar el estado de Freighter
+    // Si no coincide o Freighter no está conectado, mostrar como conectado basado en stellarAddress
+    if (status.isConnected && status.publicKey === userStellarAddress) {
+      // Estado coincide - usar estado completo de Freighter
+      setWalletStatus({
+        isAvailable: status.isAvailable,
+        isConnected: true,
+        publicKey: status.publicKey,
+      })
+    } else {
+      // Mostrar como conectado basado en stellarAddress del usuario
+      setWalletStatus({
+        isAvailable: status.isAvailable,
+        isConnected: true,
+        publicKey: userStellarAddress,
+      })
+    }
+  }, [user?.stellarAddress])
+
+  useEffect(() => {
+    // Si el usuario tiene stellarAddress, mostrar como conectado inmediatamente
+    const userStellarAddress = user?.stellarAddress 
+      ? (typeof user.stellarAddress === 'string' ? user.stellarAddress : String(user.stellarAddress))
+      : ''
+    
+    if (userStellarAddress) {
+      setWalletStatus({
+        isAvailable: true,
+        isConnected: true,
+        publicKey: userStellarAddress,
+      })
+    } else {
+      // Si no tiene stellarAddress, verificar estado real de Freighter
+      checkWalletStatus()
+    }
+    
+    // Escuchar eventos de cambio de foco de ventana para verificar estado cuando el usuario vuelve
+    const handleFocus = () => {
+      if (!userStellarAddress) {
+        checkWalletStatus()
+      }
+    }
+    
+    window.addEventListener('focus', handleFocus)
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [checkWalletStatus, user?.stellarAddress]) // Actualizar cuando cambia checkWalletStatus o user.stellarAddress
+
+  const handleDisconnectWallet = async () => {
+    try {
+      // Limpiar dirección Stellar del perfil
+      const updatedUser = await api.updateProfile({ stellarAddress: '' })
+      
+      // Actualizar el usuario en el contexto
+      if (updatedUser) {
+        setUser(updatedUser)
+      }
+      
+      // Forzar estado de wallet a desconectado (NO verificar después)
+      setWalletStatus({
+        isAvailable: true,
+        isConnected: false,
+        publicKey: null,
+      })
+      
+      // NO llamar a checkWalletStatus() aquí porque volvería a detectar la conexión
+      // La extensión de Freighter puede seguir conectada, pero nosotros la desconectamos del perfil
+      
+      toast.success(t('wallet.disconnected') || 'Wallet desconectada exitosamente')
+    } catch (error: any) {
+      console.error('Error disconnecting wallet:', error)
+      toast.error(error.message || t('wallet.disconnectionError') || 'Error al desconectar wallet')
+    }
+  }
 
   if (!user) return null
 
@@ -63,18 +171,6 @@ export default function UserMenu() {
   // Eliminar duplicados
   const availableRoles = Array.from(new Set(allUserRoles))
   const currentActiveRole = user.activeRole || user.role
-
-  // Debug: verificar roles
-  console.log('🔍 UserMenu Debug:', {
-    userRole: user.role,
-    activeRole: user.activeRole,
-    roles: user.roles,
-    userRoles: user.userRoles,
-    allUserRoles,
-    availableRoles,
-    availableRolesLength: availableRoles.length,
-    shouldShowSelector: availableRoles.length > 1
-  })
 
   const handleRoleChange = async (newRole: UserRole) => {
     try {
@@ -144,6 +240,129 @@ export default function UserMenu() {
             </div>
           </div>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {/* Botón Conectar/Desconectar Wallet */}
+        {walletStatus?.isConnected ? (
+          <>
+            <DropdownMenuItem 
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setShowWalletModal(true)
+              }}
+              className="cursor-pointer hover:bg-primary/10 transition-colors"
+            >
+              <div className="flex items-center gap-2 w-full">
+                <div className="p-1.5 rounded-md bg-green-500/20">
+                  <Wallet className="h-4 w-4 text-green-500" />
+                </div>
+                <span className="flex-1 font-medium">
+                  {t('wallet.connected') || 'Wallet Conectada'}
+                </span>
+                <CheckCircle className="h-4 w-4 text-green-500" />
+              </div>
+            </DropdownMenuItem>
+            {walletStatus.publicKey && (
+              <div className="px-2 py-1 text-xs text-muted-foreground font-mono break-all">
+                {walletStatus.publicKey.slice(0, 8)}...{walletStatus.publicKey.slice(-6)}
+              </div>
+            )}
+            <DropdownMenuItem 
+              onClick={async (e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                await handleDisconnectWallet()
+              }}
+              className="cursor-pointer hover:bg-red-500/10 transition-colors text-red-600"
+            >
+              <div className="flex items-center gap-2 w-full">
+                <div className="p-1.5 rounded-md bg-red-500/20">
+                  <LogOut className="h-4 w-4 text-red-500" />
+                </div>
+                <span className="flex-1 font-medium">
+                  {t('wallet.disconnect') || 'Desconectar Wallet'}
+                </span>
+              </div>
+            </DropdownMenuItem>
+          </>
+        ) : (
+          <DropdownMenuItem 
+            onClick={async (e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              
+              // Conectar directamente - mostrará pop-up nativo de Freighter
+              try {
+                const { connectFreighter } = await import('@/services/freighterService')
+                
+                // Esto mostrará el pop-up nativo de Freighter
+                const account = await connectFreighter()
+                
+                // Actualizar perfil del usuario con la dirección Stellar
+                try {
+                  const updatedUser = await api.updateProfile({ stellarAddress: account.publicKey })
+                  // Actualizar el usuario en el contexto inmediatamente
+                  if (updatedUser) {
+                    setUser(updatedUser)
+                  }
+                } catch (profileError) {
+                  console.error('Error updating profile:', profileError)
+                  throw profileError
+                }
+                
+                // Actualizar estado local inmediatamente con la información de la conexión
+                setWalletStatus({
+                  isAvailable: true,
+                  isConnected: true,
+                  publicKey: account.publicKey,
+                })
+                
+                toast.success(t('wallet.connected') || 'Wallet conectada exitosamente')
+                
+                // NO llamar a checkWalletStatus aquí porque puede sobrescribir el estado
+                // El useEffect que depende de user?.stellarAddress se encargará de mantener el estado
+                
+                // No recargar la página - el estado ya se actualizó
+                // El componente se actualizará automáticamente con el nuevo estado
+              } catch (error: any) {
+                console.error('Error connecting wallet:', error)
+                console.error('Error details:', {
+                  message: error.message,
+                  stack: error.stack,
+                  name: error.name
+                })
+                
+                // Solo mostrar modal si realmente no está instalado
+                const errorMessage = error.message?.toLowerCase() || ''
+                if (errorMessage.includes('no está instalada') || 
+                    errorMessage.includes('not installed') ||
+                    errorMessage.includes('extension not detected') ||
+                    errorMessage.includes('freighter is not installed')) {
+                  setShowWalletModal(true)
+                } else if (errorMessage.includes('cancelado') || 
+                           errorMessage.includes('rejected') ||
+                           errorMessage.includes('cancelled') ||
+                           errorMessage.includes('user rejected')) {
+                  // Usuario canceló la conexión - no mostrar error
+                  return
+                } else {
+                  // Otros errores - mostrar mensaje pero no el modal
+                  toast.error(error.message || t('wallet.connectionError') || 'Error al conectar wallet')
+                }
+              }
+            }}
+            className="cursor-pointer hover:bg-primary/10 transition-colors"
+          >
+            <div className="flex items-center gap-2 w-full">
+              <div className="p-1.5 rounded-md bg-primary/10">
+                <Wallet className="h-4 w-4 text-primary" />
+              </div>
+              <span className="flex-1 font-medium">
+                CONNECT WALLET
+              </span>
+            </div>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuSeparator />
         {availableRoles.length > 1 && (
           <>
@@ -224,6 +443,23 @@ export default function UserMenu() {
           {t('auth.logout')}
         </DropdownMenuItem>
       </DropdownMenuContent>
+      
+      {/* Modal de conexión de wallet */}
+      <ConnectWalletModal
+        open={showWalletModal}
+        onOpenChange={setShowWalletModal}
+        onConnected={async (publicKey) => {
+          await checkWalletStatus()
+          // Actualizar perfil del usuario con la dirección Stellar
+          try {
+            await api.updateProfile({ stellarAddress: publicKey })
+            // Actualizar el usuario en el contexto si es necesario
+            window.location.reload() // Recargar para actualizar el estado
+          } catch (error) {
+            console.error('Error updating profile:', error)
+          }
+        }}
+      />
     </DropdownMenu>
   )
 }

@@ -100,6 +100,8 @@ import notificationRoutes from './routes/notificationRoutes'
 import driverAlertRoutes from './routes/driverAlertRoutes'
 import onboardingRoutes from './routes/onboardingRoutes'
 import uploadRoutes from './routes/uploadRoutes'
+import paymentRoutes from './routes/paymentRoutes'
+import walletRoutes from './routes/walletRoutes'
 app.use('/api/auth', authRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/currency', currencyRoutes)
@@ -112,6 +114,8 @@ app.use('/api/driver', driverRoutes)
 app.use('/api/notifications', notificationRoutes)
 app.use('/api/onboarding', onboardingRoutes)
 app.use('/api/upload', uploadRoutes)
+app.use('/api/payments', paymentRoutes)
+app.use('/api/wallet', walletRoutes)
 // app.use('/api/users', userRoutes)
 // app.use('/api/whatsapp', whatsappRoutes)
 

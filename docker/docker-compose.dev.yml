@@ -1,77 +1,25 @@
-# Override para desarrollo
-# Uso: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
-
-version: '3.8'
+name: lumo-dev
 
 services:
-  backend:
-    build:
-      context: ../backend
-      dockerfile: Dockerfile
-      target: deps
-    volumes:
-      - ../backend:/app
-      - backend-node-modules:/app/node_modules
-      - backend-dist:/app/dist
-    environment:
-      NODE_ENV: development
-    command: sh -c "yarn prisma:generate && yarn dev"
-    # No exponer puerto 3000 en desarrollo, solo acceso interno
-    # ports:
-    #   - "3000:3000"
-
-  frontend:
-    build:
-      context: ../frontend
-      dockerfile: Dockerfile
-      target: development
-    volumes:
-      - ../frontend:/app
-      - frontend-node-modules:/app/node_modules
-      - frontend-dist:/app/dist
-    env_file:
-      - ../.env
-    environment:
-      NODE_ENV: development
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/api}
-      VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY}
-    ports:
-      - "5174:5174"
-    expose:
-      - "5174"
-
-  website:
-    build:
-      context: ../website
-      dockerfile: Dockerfile
-      target: development
-    volumes:
-      - ../website:/app
-      - website-node-modules:/app/node_modules
-      - website-dist:/app/dist
-    env_file:
-      - ../.env
-    environment:
-      NODE_ENV: development
-      VITE_API_URL: ${VITE_API_URL:-http://transportesedimburgo.com/api}
-      VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY}
-    ports:
-      - "5173:5173"
-    expose:
-      - "5173"
-
-  backend:
-    command: sh -c "yarn prisma:generate && yarn dev"
-
+  # PostgreSQL Database para desarrollo
   postgres:
+    image: postgres:16-alpine
+    container_name: lumo-postgres-dev
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lumo
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: lumo
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lumo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
-  backend-node-modules:
-  backend-dist:
-  frontend-node-modules:
-  frontend-dist:
-  website-node-modules:
-  website-dist:
-
+  postgres-dev-data:
+    driver: local

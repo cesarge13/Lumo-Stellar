@@ -29,6 +29,7 @@
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tabs": "^1.1.13",
+    "@stellar/freighter-api": "^6.0.1",
     "@tailwindcss/vite": "^4.1.17",
     "autoprefixer": "^10.4.22",
     "class-variance-authority": "^0.7.1",

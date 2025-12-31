@@ -31,6 +31,7 @@
     
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Lumo" />
@@ -51,13 +52,31 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      // Registrar Service Worker
+      // Registrar Service Worker solo en producción
+      // En desarrollo, el Service Worker puede causar problemas, así que lo deshabilitamos
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('SW registrado:', reg))
-            .catch(err => console.log('Error SW:', err))
-        })
+        // Solo registrar en producción (localhost se considera desarrollo)
+        const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+        
+        if (isProduction) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+              .then(reg => {
+                console.log('SW registrado:', reg)
+                reg.update()
+              })
+              .catch(err => {
+                console.warn('Error SW (no crítico):', err)
+              })
+          })
+        } else {
+          // En desarrollo, desregistrar cualquier Service Worker existente
+          navigator.serviceWorker.getRegistrations().then(registrations => {
+            registrations.forEach(registration => {
+              registration.unregister()
+            })
+          })
+        }
       }
     </script>
   </body>

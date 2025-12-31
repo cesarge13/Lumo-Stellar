@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import StellarLogo from './StellarLogo'
 
 const APP_VERSION = '1.0.0'
 
@@ -24,9 +25,16 @@ export default function Footer() {
               &copy; {new Date().getFullYear()} {t('footer.copyright') || 'Peranto SSI NA, LLC & Web3 Chile. Todos los derechos reservados.'}
             </p>
             <span className="hidden md:inline text-muted-foreground/50">|</span>
-            <p className="text-muted-foreground/80">
-              Lumo by Peranto v{APP_VERSION}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-muted-foreground/80">
+                Lumo by Peranto v{APP_VERSION}
+              </p>
+              <span className="hidden md:inline text-muted-foreground/50">|</span>
+              <div className="flex items-center gap-1.5 text-muted-foreground/60">
+                <span className="text-xs">Powered by</span>
+                <StellarLogo size={16} variant="monochrome" />
+              </div>
+            </div>
           </div>
         </div>
       </div>

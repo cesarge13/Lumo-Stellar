@@ -39,9 +39,10 @@ export default function HostProfile() {
       if (user) {
         setFormData({
           displayName: user.name,
-        bio: '',
-        specialties: '',
-      })
+          bio: '',
+          specialties: '',
+        })
+      }
     } catch (error) {
       console.error('Error loading profile:', error)
     }

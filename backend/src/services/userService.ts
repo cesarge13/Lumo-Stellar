@@ -323,6 +323,7 @@ export interface UpdateUserData {
   isEmailVerified?: boolean
   avatar?: string
   password?: string
+  stellarAddress?: string
 }
 
 export interface ListUsersOptions {
@@ -469,6 +470,7 @@ export async function updateUser(
   if (data.isVerified !== undefined) updateData.isVerified = data.isVerified
   if (data.isEmailVerified !== undefined) updateData.isEmailVerified = data.isEmailVerified
   if (data.avatar !== undefined) updateData.avatar = data.avatar
+  if (data.stellarAddress !== undefined) updateData.stellarAddress = data.stellarAddress || null
 
   // Si se proporciona una nueva contraseña, hashearla
   if (data.password) {

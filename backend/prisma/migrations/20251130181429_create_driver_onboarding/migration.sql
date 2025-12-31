@@ -19,6 +19,20 @@ EXCEPTION
  WHEN duplicate_object THEN null;
 END $$;
 
+-- CreateEnum: DriverType (necesario para la tabla driver_onboarding)
+DO $$ BEGIN
+ CREATE TYPE "DriverType" AS ENUM('INDEPENDENT', 'COMPANY');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+
+-- CreateEnum: TaxIdType (necesario para la tabla driver_onboarding)
+DO $$ BEGIN
+ CREATE TYPE "TaxIdType" AS ENUM('RUT', 'CUIT', 'RFC', 'CPF', 'CNPJ', 'NIT', 'RUC', 'NIT_BOL', 'SIN', 'EIN', 'OTHER');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+
 -- CreateTable: driver_onboarding
 CREATE TABLE IF NOT EXISTS "driver_onboarding" (
     "id" TEXT NOT NULL,

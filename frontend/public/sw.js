@@ -39,6 +39,52 @@ self.addEventListener('activate', (event) => {
 
 // Interceptar requests para cache
 self.addEventListener('fetch', (event) => {
+  // Solo interceptar solicitudes GET y del mismo origen
+  if (event.request.method !== 'GET') {
+    return
+  }
+
+  const url = new URL(event.request.url)
+
+  // NO interceptar solicitudes de API - dejar que pasen directamente
+  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/api')) {
+    return // Dejar que el navegador maneje estas solicitudes normalmente
+  }
+
+  // No interceptar solicitudes externas (solo mismo origen)
+  if (url.origin !== self.location.origin) {
+    return
+  }
+
+  // No interceptar solicitudes de recursos dinámicos o que no deberían ser cacheados
+  if (
+    url.pathname.includes('/socket.io/') ||
+    url.pathname.includes('/_vite/') ||
+    url.pathname.includes('/node_modules/') ||
+    url.pathname.includes('.hot-update.') ||
+    url.pathname.includes('/src/') ||
+    url.search.includes('_vite')
+  ) {
+    return
+  }
+
+  // Solo cachear recursos estáticos (HTML, CSS, JS, imágenes, etc.)
+  const isStaticResource = 
+    url.pathname.endsWith('.html') ||
+    url.pathname.endsWith('.css') ||
+    url.pathname.endsWith('.js') ||
+    url.pathname.endsWith('.png') ||
+    url.pathname.endsWith('.jpg') ||
+    url.pathname.endsWith('.svg') ||
+    url.pathname.endsWith('.ico') ||
+    url.pathname.endsWith('.json') ||
+    url.pathname === '/' ||
+    url.pathname === '/index.html'
+
+  if (!isStaticResource) {
+    return // No cachear otros recursos
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
@@ -46,7 +92,24 @@ self.addEventListener('fetch', (event) => {
         if (response) {
           return response
         }
+        
+        // Intentar hacer fetch solo para recursos estáticos
         return fetch(event.request)
+          .then((response) => {
+            // Solo cachear respuestas exitosas y del mismo origen
+            if (response && response.status === 200 && response.type === 'basic') {
+              const responseToCache = response.clone()
+              caches.open(CACHE_NAME).then((cache) => {
+                cache.put(event.request, responseToCache)
+              })
+            }
+            return response
+          })
+          .catch((error) => {
+            // Si falla el fetch, devolver una respuesta vacía
+            console.warn('Service Worker: Error al hacer fetch de', event.request.url)
+            return new Response('', { status: 408, statusText: 'Request Timeout' })
+          })
       })
   )
 })

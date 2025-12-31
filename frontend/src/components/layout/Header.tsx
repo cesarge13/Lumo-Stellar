@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import UserMenu from './UserMenu'
 import { NotificationBell } from '@/components/notifications/NotificationBell'
 import StarIcon from './StarIcon'
+import StellarLogo from './StellarLogo'
 
 export default function Header() {
   const { t } = useTranslation()
@@ -16,6 +17,10 @@ export default function Header() {
         <Link to="/" className="text-xl md:text-2xl font-bold flex items-center gap-2 hover:opacity-80 transition-opacity">
           <StarIcon />
           <span>Lumo</span>
+          <span className="hidden md:inline-flex items-center gap-1 text-sm font-normal text-muted-foreground ml-2">
+            <span className="text-xs">powered by</span>
+            <StellarLogo size={16} variant="monochrome" />
+          </span>
         </Link>
         <nav className="flex items-center gap-2 md:gap-4">
           <Link to="/">

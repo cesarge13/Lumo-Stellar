@@ -159,9 +159,17 @@ class ApiClient {
     })
   }
 
-  async cancelTrip(id: string) {
+  async cancelTrip(id: string, reason?: string) {
     return this.request<Trip>(`/trips/${id}/cancel`, {
       method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    })
+  }
+
+  async cancelDriverTrip(id: string, reason?: string) {
+    return this.request<Trip>(`/driver/trips/${id}/cancel`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
     })
   }
 
@@ -368,6 +376,7 @@ class ApiClient {
     preferredCurrency?: string
     country?: string
     avatar?: string
+    stellarAddress?: string
   }) {
     return this.request<{ user: User }>('/auth/me', {
       method: 'PUT',
@@ -546,6 +555,42 @@ class ApiClient {
     return this.request<Trip>(`/driver/trips/${tripId}/complete`, {
       method: 'POST',
       body: JSON.stringify(options || {}),
+    })
+  }
+
+  // Pagos Stellar
+  async getTripPaymentInfo(tripId: string) {
+    return this.request<{
+      trip: {
+        id: string
+        tripNumber: string
+        totalPrice: number
+        currency: string
+        paymentQrCode?: string
+        paymentAddress?: string
+        paymentExpiresAt?: string
+        status: string
+        completedAt?: string
+        transactionXdr?: string
+      }
+      payment: {
+        id: string
+        amount: number
+        currency: string
+        status: string
+        paymentMethodDetails?: any
+      } | null
+    }>(`/payments/trip/${tripId}`)
+  }
+
+  async verifyStellarPayment(paymentId: string, transactionId: string) {
+    return this.request<{
+      payment: any
+      verified: boolean
+      message: string
+    }>(`/payments/${paymentId}/verify`, {
+      method: 'POST',
+      body: JSON.stringify({ transactionId }),
     })
   }
 
@@ -856,6 +901,36 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify({ reason }),
     })
+  }
+
+  // Wallet Mobile Connection
+  async generateConnectionQR() {
+    return this.request<{
+      qrCode: string
+      connectionUrl: string
+      token: string
+      expiresAt: string
+    }>('/wallet/generate-connection-qr', {
+      method: 'POST',
+    })
+  }
+
+  async verifyMobileConnection(token: string, stellarAddress: string) {
+    return this.request<{
+      success: boolean
+      message: string
+      user: User
+    }>(`/wallet/verify-connection/${token}`, {
+      method: 'POST',
+      body: JSON.stringify({ stellarAddress }),
+    })
+  }
+
+  async getWalletConnectionStatus() {
+    return this.request<{
+      isConnected: boolean
+      stellarAddress: string | null
+    }>('/wallet/connection-status')
   }
 }
 

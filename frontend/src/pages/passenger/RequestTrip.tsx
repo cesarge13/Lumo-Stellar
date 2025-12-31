@@ -53,6 +53,8 @@ export default function RequestTrip() {
   const [isRoundTrip, setIsRoundTrip] = useState(false)
   const [returnScheduledAt, setReturnScheduledAt] = useState('')
   const [scheduledAt, setScheduledAt] = useState('')
+  const [scheduledDate, setScheduledDate] = useState('')
+  const [scheduledTime, setScheduledTime] = useState('')
   const [preferredVehicleType, setPreferredVehicleType] = useState<VehicleType | 'ANY'>('ANY')
   const [isLoading, setIsLoading] = useState(false)
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false)
@@ -73,6 +75,18 @@ export default function RequestTrip() {
   const destinationInputRef = useRef<HTMLInputElement>(null)
   const originDropdownRef = useRef<HTMLDivElement>(null)
   const destinationDropdownRef = useRef<HTMLDivElement>(null)
+
+  // Combinar fecha y hora en scheduledAt cuando cambien
+  useEffect(() => {
+    if (scheduledDate && scheduledTime) {
+      // Combinar fecha y hora en formato ISO
+      const combined = `${scheduledDate}T${scheduledTime}`
+      setScheduledAt(combined)
+    } else {
+      // Si falta fecha o hora, dejar scheduledAt vacío (es opcional)
+      setScheduledAt('')
+    }
+  }, [scheduledDate, scheduledTime])
 
   // Cerrar dropdowns al hacer click fuera
   useEffect(() => {
@@ -162,12 +176,22 @@ export default function RequestTrip() {
   }, [origin, destination, isRoundTrip, preferredVehicleType])
 
   const calculateRouteAndPrice = async () => {
-    if (!origin || !destination) return
+    if (!origin || !destination) {
+      console.log('⚠️ No se puede calcular ruta: falta origen o destino')
+      setRouteInfo(null)
+      return
+    }
 
     setIsCalculatingRoute(true)
     try {
       // Obtener país del origen o destino (prioridad: origen)
       const tripCountry = origin.country || destination.country || user?.country || 'CL'
+      
+      console.log('🔄 Calculando ruta...', {
+        origen: origin.address,
+        destino: destination.address,
+        país: tripCountry
+      })
       
       const route = await calculateRoute(
         { lat: origin.latitude, lng: origin.longitude },
@@ -178,6 +202,12 @@ export default function RequestTrip() {
       )
 
       if (route) {
+        console.log('✅ Ruta calculada exitosamente:', {
+          distancia: route.distanceText,
+          duración: route.durationText,
+          precio: route.price
+        })
+        
         const oneWayPrice = route.price
         const finalPrice = isRoundTrip ? oneWayPrice * 2 : oneWayPrice
         
@@ -195,12 +225,14 @@ export default function RequestTrip() {
         const formatted = await formatConverted(finalPrice, 'CLP')
         setFormattedPrice(formatted)
       } else {
-        toast.error(t('passenger.routeError') || 'No se pudo calcular la ruta')
+        console.error('❌ calculateRoute devolvió null')
+        toast.error(t('passenger.routeError') || 'No se pudo calcular la ruta. Verifica que Google Maps esté configurado correctamente.')
         setRouteInfo(null)
       }
-    } catch (error) {
-      console.error('Error calculando ruta:', error)
-      toast.error(t('passenger.routeError') || 'Error al calcular la ruta')
+    } catch (error: any) {
+      console.error('❌ Error calculando ruta:', error)
+      const errorMessage = error?.message || t('passenger.routeError') || 'Error al calcular la ruta'
+      toast.error(`${errorMessage}. Verifica la consola para más detalles.`)
       setRouteInfo(null)
     } finally {
       setIsCalculatingRoute(false)
@@ -288,6 +320,36 @@ export default function RequestTrip() {
       const totalPrice = isRoundTrip ? oneWayPricing.totalPrice * 2 : oneWayPricing.totalPrice
       const currency = oneWayPricing.currency
 
+      // Validar y formatear fecha programada
+      let formattedScheduledAt: string | undefined = undefined
+      if (scheduledAt && scheduledAt.trim() !== '') {
+        try {
+          const date = new Date(scheduledAt)
+          if (!isNaN(date.getTime())) {
+            formattedScheduledAt = date.toISOString()
+          } else {
+            console.warn('Fecha programada inválida:', scheduledAt)
+          }
+        } catch (error) {
+          console.error('Error formateando fecha programada:', error)
+        }
+      }
+
+      // Validar y formatear fecha de vuelta
+      let formattedReturnScheduledAt: string | undefined = undefined
+      if (isRoundTrip && returnScheduledAt && returnScheduledAt.trim() !== '') {
+        try {
+          const date = new Date(returnScheduledAt)
+          if (!isNaN(date.getTime())) {
+            formattedReturnScheduledAt = date.toISOString()
+          } else {
+            console.warn('Fecha de vuelta inválida:', returnScheduledAt)
+          }
+        } catch (error) {
+          console.error('Error formateando fecha de vuelta:', error)
+        }
+      }
+
       const tripData = {
         originAddress: origin.address,
         originLatitude: origin.latitude,
@@ -297,8 +359,8 @@ export default function RequestTrip() {
         destinationLongitude: destination.longitude,
         originPlaceId: origin.placeId,
         destinationPlaceId: destination.placeId,
-        scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined,
-        returnScheduledAt: isRoundTrip && returnScheduledAt ? new Date(returnScheduledAt).toISOString() : undefined,
+        scheduledAt: formattedScheduledAt,
+        returnScheduledAt: formattedReturnScheduledAt,
         passengers: Math.min(Math.max(passengers, 1), 7), // Limitar entre 1 y 7
         isRoundTrip,
         preferredVehicleType: preferredVehicleType !== 'ANY' ? preferredVehicleType : undefined,
@@ -441,6 +503,19 @@ export default function RequestTrip() {
                 </div>
               )}
 
+              {!routeInfo && !isCalculatingRoute && origin && destination && (
+                <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                  <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                    ⚠️ No se pudo calcular la ruta. Verifica:
+                  </p>
+                  <ul className="text-xs text-yellow-700 dark:text-yellow-300 mt-2 ml-4 list-disc">
+                    <li>Que Google Maps esté configurado correctamente</li>
+                    <li>Que las direcciones sean válidas</li>
+                    <li>Revisa la consola del navegador para más detalles</li>
+                  </ul>
+                </div>
+              )}
+
               {routeInfo && !isCalculatingRoute && origin && destination && (
                 <>
                   {/* Mapa de la ruta */}
@@ -578,17 +653,45 @@ export default function RequestTrip() {
 
               {/* Fecha programada (opcional) */}
               <div className="space-y-2">
-                <Label htmlFor="scheduledAt" className="flex items-center gap-2">
+                <Label className="flex items-center gap-2">
                   <Calendar className="h-4 w-4" />
                   {t('passenger.scheduledAt') || 'Fecha y hora de ida (opcional)'}
                 </Label>
-                <Input
-                  id="scheduledAt"
-                  type="datetime-local"
-                  value={scheduledAt}
-                  onChange={(e) => setScheduledAt(e.target.value)}
-                  min={new Date().toISOString().slice(0, 16)}
-                />
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <Label htmlFor="scheduledDate" className="text-xs text-muted-foreground mb-1 block">
+                      Fecha
+                    </Label>
+                    <input
+                      id="scheduledDate"
+                      type="date"
+                      value={scheduledDate}
+                      onChange={(e) => setScheduledDate(e.target.value)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="scheduledTime" className="text-xs text-muted-foreground mb-1 block">
+                      Hora
+                    </Label>
+                    <input
+                      id="scheduledTime"
+                      type="time"
+                      value={scheduledTime}
+                      onChange={(e) => setScheduledTime(e.target.value)}
+                      step="1"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    />
+                  </div>
+                </div>
+                {scheduledAt && (
+                  <p className="text-xs text-muted-foreground">
+                    Programado para: {new Date(scheduledAt).toLocaleString('es-CL', {
+                      dateStyle: 'long',
+                      timeStyle: 'short'
+                    })}
+                  </p>
+                )}
               </div>
 
               {/* Fecha de vuelta (si es ida y vuelta) */}
@@ -625,6 +728,24 @@ export default function RequestTrip() {
                   type="submit"
                   disabled={isLoading || !origin || !destination || !routeInfo}
                   className="flex-1"
+                  onClick={() => {
+                    // Debug: mostrar qué falta
+                    if (!origin) {
+                      console.log('❌ Falta origen')
+                    }
+                    if (!destination) {
+                      console.log('❌ Falta destino')
+                    }
+                    if (!routeInfo) {
+                      console.log('❌ Falta routeInfo')
+                    }
+                    if (isLoading) {
+                      console.log('⏳ Ya está cargando')
+                    }
+                    if (origin && destination && routeInfo && !isLoading) {
+                      console.log('✅ Todo listo para enviar')
+                    }
+                  }}
                 >
                   {isLoading ? (
                     <>

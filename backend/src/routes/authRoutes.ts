@@ -303,7 +303,7 @@ router.patch('/me/active-role', authenticate, async (req, res) => {
 router.put('/me', authenticate, async (req, res) => {
   try {
     const userId = req.user!.id
-    const { name, phone, preferredCurrency, country, avatar } = req.body
+    const { name, phone, preferredCurrency, country, avatar, stellarAddress } = req.body
 
     const updateData: UpdateUserData = {}
     if (name !== undefined) updateData.name = name
@@ -311,6 +311,7 @@ router.put('/me', authenticate, async (req, res) => {
     if (preferredCurrency !== undefined) updateData.preferredCurrency = preferredCurrency
     if (country !== undefined) updateData.country = country
     if (avatar !== undefined) updateData.avatar = avatar
+    if (stellarAddress !== undefined) updateData.stellarAddress = stellarAddress || null
 
     const user = await updateUser(userId, updateData)
 

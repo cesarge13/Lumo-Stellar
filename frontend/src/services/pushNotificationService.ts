@@ -36,15 +36,29 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
     return null
   }
 
+  // En desarrollo, solo registrar si realmente se necesita (notificaciones push)
+  // En producción, siempre registrar
+  if (import.meta.env.DEV) {
+    // En desarrollo, solo registrar si hay VAPID key configurada
+    if (!VAPID_PUBLIC_KEY) {
+      return null
+    }
+  }
+
   try {
     const registration = await navigator.serviceWorker.register('/sw.js', {
       scope: '/'
     })
     
     console.log('Service Worker registrado:', registration)
+    
+    // Limpiar service workers antiguos
+    registration.update()
+    
     return registration
   } catch (error) {
-    console.error('Error registrando Service Worker:', error)
+    // No es crítico si falla el registro del SW
+    console.warn('Error registrando Service Worker (no crítico):', error)
     return null
   }
 }
@@ -64,9 +78,10 @@ export async function getPushSubscription(
         return null
       }
 
+      const applicationServerKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        applicationServerKey: applicationServerKey as unknown as ArrayBuffer
       })
     }
 

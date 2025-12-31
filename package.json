@@ -7,10 +7,14 @@
     "frontend"
   ],
   "scripts": {
-    "dev:backend": "yarn workspace backend dev",
-    "dev:frontend": "yarn workspace frontend dev",
-    "build:backend": "yarn workspace backend build",
-    "build:frontend": "yarn workspace frontend build",
+    "dev": "yarn dev:backend & yarn dev:frontend",
+    "dev:backend": "yarn workspace lumo-backend dev",
+    "dev:frontend": "yarn workspace lumo-frontend dev",
+    "build:backend": "yarn workspace lumo-backend build",
+    "build:frontend": "yarn workspace lumo-frontend build",
+    "db:start": "bash scripts/start-db.sh",
+    "db:stop": "cd docker && docker-compose -f docker-compose.dev.yml down",
+    "db:migrate": "cd backend && yarn prisma:generate && yarn prisma:migrate dev",
     "docker:up": "cd docker && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d",
     "docker:down": "cd docker && docker compose -f docker-compose.yml -f docker-compose.prod.yml down",
     "docker:logs": "cd docker && docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f"

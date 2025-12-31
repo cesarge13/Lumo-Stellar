@@ -38,8 +38,9 @@ export default function ModeratorProfile() {
       if (user) {
         setFormData({
           displayName: user.name,
-        bio: '',
-      })
+          bio: '',
+        })
+      }
     } catch (error) {
       console.error('Error loading profile:', error)
     }

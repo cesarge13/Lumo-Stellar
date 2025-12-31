@@ -34,11 +34,29 @@ export function InstallPWAButton() {
       return
     }
 
+    // Verificar si está en iOS (no soporta beforeinstallprompt)
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream
+    if (isIOS) {
+      // En iOS, el usuario debe usar el menú "Compartir" > "Añadir a pantalla de inicio"
+      return
+    }
+
     // Escuchar el evento beforeinstallprompt
     const handleBeforeInstallPrompt = (e: Event) => {
+      console.log('beforeinstallprompt event recibido')
+      // Prevenir el banner automático del navegador
+      // Esto es intencional: queremos mostrar nuestro diálogo personalizado
       e.preventDefault()
-      setDeferredPrompt(e as BeforeInstallPromptEvent)
-      setShowInstallPrompt(true)
+      // Guardar el evento para usarlo después
+      const promptEvent = e as BeforeInstallPromptEvent
+      setDeferredPrompt(promptEvent)
+      console.log('DeferredPrompt guardado, mostrando diálogo en 1 segundo...')
+      // Mostrar nuestro diálogo personalizado después de un pequeño delay
+      // para dar tiempo a que la página cargue completamente
+      setTimeout(() => {
+        console.log('Mostrando diálogo de instalación PWA')
+        setShowInstallPrompt(true)
+      }, 1000) // Esperar 1 segundo antes de mostrar el diálogo
     }
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
@@ -56,22 +74,39 @@ export function InstallPWAButton() {
   }, [])
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) return
-
-    // Mostrar el prompt de instalación
-    await deferredPrompt.prompt()
-
-    // Esperar la respuesta del usuario
-    const { outcome } = await deferredPrompt.userChoice
-
-    if (outcome === 'accepted') {
-      console.log('Usuario aceptó instalar la PWA')
-    } else {
-      console.log('Usuario rechazó instalar la PWA')
+    if (!deferredPrompt) {
+      // Si no hay deferredPrompt, puede ser iOS o el navegador no soporta PWA
+      console.warn('No se puede instalar: el navegador no soporta la instalación de PWA o ya está instalada')
+      setShowInstallPrompt(false)
+      return
     }
 
-    setDeferredPrompt(null)
-    setShowInstallPrompt(false)
+    try {
+      console.log('Llamando a deferredPrompt.prompt()...')
+      // Mostrar el prompt de instalación nativo del navegador
+      await deferredPrompt.prompt()
+      console.log('Prompt mostrado, esperando respuesta del usuario...')
+
+      // Esperar la respuesta del usuario
+      const { outcome } = await deferredPrompt.userChoice
+      console.log('Usuario eligió:', outcome)
+
+      if (outcome === 'accepted') {
+        console.log('✅ Usuario aceptó instalar la PWA')
+        // El evento appinstalled se disparará automáticamente
+      } else {
+        console.log('❌ Usuario rechazó instalar la PWA')
+        // Guardar en localStorage para no mostrar de nuevo por un tiempo
+        localStorage.setItem('pwa-install-dismissed', Date.now().toString())
+      }
+    } catch (error) {
+      console.error('❌ Error al mostrar el prompt de instalación:', error)
+      // Si hay un error, cerrar el diálogo
+      setShowInstallPrompt(false)
+    } finally {
+      setDeferredPrompt(null)
+      setShowInstallPrompt(false)
+    }
   }
 
   const handleDismiss = () => {
@@ -103,10 +138,10 @@ export function InstallPWAButton() {
     <Dialog open={showInstallPrompt} onOpenChange={setShowInstallPrompt}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t('pwa.installTitle') || 'Instalar Operations'}</DialogTitle>
+          <DialogTitle>{t('pwa.installTitle') || 'Instalar Lumo'}</DialogTitle>
           <DialogDescription>
             {t('pwa.installDescription') || 
-              'Instala Operations en tu dispositivo para acceder rápidamente y recibir notificaciones incluso cuando estés fuera del navegador.'}
+              'Instala Lumo en tu dispositivo para acceder rápidamente y recibir notificaciones incluso cuando estés fuera del navegador.'}
           </DialogDescription>
         </DialogHeader>
         <div className="py-4">

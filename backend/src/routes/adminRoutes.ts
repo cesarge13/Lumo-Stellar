@@ -608,14 +608,18 @@ router.patch('/trips/:id/assign-driver', async (req, res) => {
  */
 router.patch('/trips/:id/cancel', async (req, res) => {
   try {
+    const adminId = req.user!.id
     const { reason } = req.body
 
-    const trip = await cancelTrip(req.params.id, reason)
+    const trip = await cancelTrip(req.params.id, adminId, reason, 'ADMIN')
     res.json(trip)
   } catch (error: any) {
     console.error('Error cancelling trip:', error)
-    res.status(500).json({
-      error: 'Internal server error',
+    const statusCode = error.message.includes('no encontrado') ? 404
+      : error.message.includes('cancelado') || error.message.includes('completado') ? 400
+      : 500
+    res.status(statusCode).json({
+      error: statusCode === 404 ? 'Not Found' : 'Bad Request',
       message: error.message,
     })
   }

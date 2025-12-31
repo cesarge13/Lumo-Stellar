@@ -4,7 +4,7 @@
 
 import express from 'express'
 import { authenticate } from '../middleware/auth'
-import { createTrip, listTrips } from '../services/tripService'
+import { createTrip, listTrips, cancelTrip } from '../services/tripService'
 import { renewStartPin } from '../services/driverService'
 import { PrismaClient, TripStatus } from '@prisma/client'
 
@@ -284,6 +284,52 @@ router.post('/:id/renew-pin', authenticate, async (req, res) => {
     console.error('Error renewing start PIN:', error)
     res.status(400).json({
       error: 'Bad Request',
+      message: error.message,
+    })
+  }
+})
+
+/**
+ * PATCH /api/trips/:id/cancel
+ * Cancela un viaje (solo para pasajeros)
+ */
+router.patch('/:id/cancel', authenticate, async (req, res) => {
+  try {
+    const userId = req.user?.id
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Unauthorized',
+        message: 'Usuario no autenticado',
+      })
+    }
+
+    // Verificar que el usuario sea pasajero
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    })
+
+    if (!user || (user.role !== 'PASSENGER' && user.role !== 'ADMIN')) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Solo los pasajeros pueden cancelar viajes',
+      })
+    }
+
+    const tripId = req.params.id
+    const { reason } = req.body
+
+    const trip = await cancelTrip(tripId, userId, reason, user.role === 'ADMIN' ? 'ADMIN' : 'PASSENGER')
+
+    res.json(trip)
+  } catch (error: any) {
+    console.error('Error cancelling trip:', error)
+    const statusCode = error.message.includes('no encontrado') ? 404
+      : error.message.includes('permiso') ? 403
+      : error.message.includes('cancelado') || error.message.includes('completado') ? 400
+      : 500
+    res.status(statusCode).json({
+      error: statusCode === 404 ? 'Not Found' : statusCode === 403 ? 'Forbidden' : 'Bad Request',
       message: error.message,
     })
   }

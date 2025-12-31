@@ -22,6 +22,7 @@ model User {
   isEmailVerified         Boolean                  @default(false)
   isRootAdmin             Boolean                  @default(false)
   avatar                  String?
+  stellarAddress          String? // Dirección Stellar para recibir pagos
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   accounts                Account[]
@@ -336,9 +337,16 @@ model Trip {
   acceptanceDeadline   DateTime?
   driverAcceptedAt     DateTime?
   driverRejectedAt     DateTime?
+  cancelledAt          DateTime?
+  cancelledBy          String?
+  cancellationReason   String?
   startPin             String?
   startPinExpiresAt    DateTime?
   startQrCode          String?
+  paymentQrCode        String?
+  paymentAddress       String?
+  paymentExpiresAt     DateTime?
+  stellarTransactionId String?
   status               TripStatus      @default(PENDING)
   notes                String?
   createdAt            DateTime        @default(now())
@@ -365,6 +373,8 @@ model Trip {
   @@index([status])
   @@index([scheduledAt])
   @@index([createdAt])
+  @@index([cancelledAt])
+  @@index([cancelledBy])
   @@map("trips")
 }
 
@@ -678,6 +688,7 @@ enum PaymentMethod {
   BANK_TRANSFER
   CASH
   DIGITAL_WALLET
+  STELLAR
   OTHER
 }
 

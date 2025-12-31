@@ -177,6 +177,7 @@ export interface User {
   roles?: UserRole[] // Todos los roles (principal + adicionales)
   preferredCurrency?: Currency
   country?: string | null
+  stellarAddress?: string | null // Dirección Stellar para recibir pagos
   isActive: boolean
   isVerified: boolean
   isEmailVerified: boolean
@@ -219,6 +220,10 @@ export interface Trip {
   startPin?: string | null
   startPinExpiresAt?: string | null
   startQrCode?: string | null
+  paymentQrCode?: string | null
+  paymentAddress?: string | null
+  paymentExpiresAt?: string | null
+  stellarTransactionId?: string | null
   basePrice: number
   distancePrice: number
   timePrice: number

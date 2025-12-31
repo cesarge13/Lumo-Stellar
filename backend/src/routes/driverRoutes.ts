@@ -15,6 +15,7 @@ import {
   startTrip,
   completeTrip,
 } from '../services/driverService'
+import { cancelTrip } from '../services/tripService'
 
 const router = Router()
 
@@ -188,6 +189,7 @@ router.post('/trips/:id/start', async (req, res) => {
  * POST /api/driver/trips/:id/complete
  * Completa un viaje
  * Opcionalmente verifica GPS (conductor cerca del destino)
+ * Genera automáticamente el QR de pago Stellar usando la dirección del conductor
  */
 router.post('/trips/:id/complete', async (req, res) => {
   try {
@@ -205,6 +207,32 @@ router.post('/trips/:id/complete', async (req, res) => {
     console.error('Error completing trip:', error)
     res.status(400).json({
       error: 'Bad Request',
+      message: error.message,
+    })
+  }
+})
+
+/**
+ * PATCH /api/driver/trips/:id/cancel
+ * Cancela un viaje (solo para conductores)
+ */
+router.patch('/trips/:id/cancel', async (req, res) => {
+  try {
+    const driverId = req.user!.id
+    const tripId = req.params.id
+    const { reason } = req.body
+
+    const trip = await cancelTrip(tripId, driverId, reason, 'DRIVER')
+
+    res.json(trip)
+  } catch (error: any) {
+    console.error('Error cancelling trip:', error)
+    const statusCode = error.message.includes('no encontrado') ? 404
+      : error.message.includes('permiso') ? 403
+      : error.message.includes('cancelado') || error.message.includes('completado') ? 400
+      : 500
+    res.status(statusCode).json({
+      error: statusCode === 404 ? 'Not Found' : statusCode === 403 ? 'Forbidden' : 'Bad Request',
       message: error.message,
     })
   }

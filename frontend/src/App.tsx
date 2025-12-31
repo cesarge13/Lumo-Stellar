@@ -32,6 +32,7 @@ import DispatcherProfile from '@/pages/dispatcher/Profile'
 import SupportProfile from '@/pages/support/Profile'
 import ModeratorProfile from '@/pages/moderator/Profile'
 import Settings from '@/pages/Settings'
+import MobileWalletConnect from '@/pages/MobileWalletConnect'
 import Terms from '@/pages/Terms'
 import Privacy from '@/pages/Privacy'
 import { DriverAlertManager } from '@/components/alerts/DriverAlertManager'
@@ -119,6 +120,7 @@ function AppRoutes() {
         {/* Rutas públicas legales */}
         <Route path="terms" element={<Terms />} />
         <Route path="privacy" element={<Privacy />} />
+        <Route path="wallet/connect-mobile" element={<MobileWalletConnect />} />
         {/* Rutas de Pasajero */}
         <Route path="passenger">
           <Route 
@@ -396,7 +398,12 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <BrowserRouter>
+        <BrowserRouter
+          future={{
+            v7_startTransition: true,
+            v7_relativeSplatPath: true,
+          }}
+        >
           <AppContent />
         </BrowserRouter>
       </AuthProvider>

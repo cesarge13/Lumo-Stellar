@@ -7,10 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { MapPin, Clock, DollarSign, User, Phone, ArrowLeft, Key, QrCode, Copy, Map as MapIcon } from 'lucide-react'
+import { MapPin, Phone, ArrowLeft, Key, QrCode, Copy, Map as MapIcon, X } from 'lucide-react'
 import type { Trip } from '@/types'
 import { useCurrency } from '@/hooks/useCurrency'
 import { useAuth } from '@/contexts/AuthContext'
+import { CancelTripDialog } from '@/components/trips/CancelTripDialog'
+import { AutoPayButton } from '@/components/payments/AutoPayButton'
 
 export default function TripDetails() {
   const { t } = useTranslation()
@@ -21,6 +23,12 @@ export default function TripDetails() {
   const [trip, setTrip] = useState<Trip | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [convertedPrice, setConvertedPrice] = useState<string>('')
+  const [showCancelDialog, setShowCancelDialog] = useState(false)
+  const [isCancelling, setIsCancelling] = useState(false)
+  const [paymentInfo, setPaymentInfo] = useState<{
+    paymentId: string
+    transactionXdr?: string
+  } | null>(null)
 
   useEffect(() => {
     if (id) {
@@ -38,6 +46,29 @@ export default function TripDetails() {
       if (data) {
         const formatted = await formatConvertedAmount(data.totalPrice, data.currency)
         setConvertedPrice(formatted)
+      }
+
+      // Cargar información de pago si el viaje está completado
+      if (data?.completedAt && data?.paymentQrCode) {
+        try {
+          const paymentData = await api.getTripPaymentInfo(tripId)
+          if (paymentData.payment) {
+            setPaymentInfo({
+              paymentId: paymentData.payment.id,
+              transactionXdr: paymentData.trip.transactionXdr,
+            })
+          } else {
+            setPaymentInfo({
+              paymentId: 'pending',
+              transactionXdr: paymentData.trip.transactionXdr,
+            })
+          }
+        } catch (error) {
+          console.error('Error loading payment info:', error)
+          setPaymentInfo(null)
+        }
+      } else {
+        setPaymentInfo(null)
       }
     } catch (error) {
       console.error('Error loading trip:', error)
@@ -245,6 +276,23 @@ export default function TripDetails() {
           </Card>
         )}
 
+        {/* Botón de pago automático - Mostrar cuando el conductor completa el viaje */}
+        {trip.completedAt && trip.paymentQrCode && trip.status !== 'COMPLETED' && paymentInfo && (
+          <div className="md:col-span-2">
+            <AutoPayButton
+              tripId={trip.id}
+              paymentId={paymentInfo.paymentId}
+              transactionXdr={paymentInfo.transactionXdr}
+              driverAddress={trip.paymentAddress || trip.driver?.stellarAddress || ''}
+              amount={trip.totalPrice}
+              currency={trip.currency}
+              onPaymentSuccess={() => {
+                loadTrip(trip.id)
+              }}
+            />
+          </div>
+        )}
+
         {/* Precio y pagos */}
         <Card>
           <CardHeader>
@@ -262,6 +310,16 @@ export default function TripDetails() {
                   </p>
                 )}
               </div>
+              {trip.status === 'COMPLETED' && trip.stellarTransactionId && (
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">
+                    {t('payment.paid') || 'Pagado'}
+                  </p>
+                  <p className="text-xs font-mono text-muted-foreground">
+                    {trip.stellarTransactionId.slice(0, 8)}...
+                  </p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -297,31 +355,53 @@ export default function TripDetails() {
       {/* Acciones */}
       <div className="mt-6 flex gap-4 flex-wrap">
         {(trip.status === 'CONFIRMED' || trip.status === 'IN_PROGRESS') && (
-          <Button
-            variant="default"
-            onClick={() => navigate(`/passenger/trips/${trip.id}/track`)}
-          >
-            <MapIcon className="h-4 w-4 mr-2" />
-            {t('passenger.trackTrip') || 'Ver Ruta'}
-          </Button>
+          <>
+            <Button
+              variant="default"
+              onClick={() => navigate(`/passenger/trips/${trip.id}/track`)}
+            >
+              <MapIcon className="h-4 w-4 mr-2" />
+              {t('passenger.trackTrip') || 'Ver Ruta'}
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => setShowCancelDialog(true)}
+            >
+              <X className="h-4 w-4 mr-2" />
+              {t('common.cancel') || 'Cancelar Viaje'}
+            </Button>
+          </>
         )}
-        {trip.status === 'PENDING' && (
+        {(trip.status === 'PENDING') && (
           <Button
             variant="destructive"
-            onClick={async () => {
-              try {
-                await api.cancelTrip(trip.id)
-                toast.success(t('passenger.tripCancelled') || 'Viaje cancelado')
-                navigate('/passenger/trips')
-              } catch (error: any) {
-                toast.error(error.message || t('passenger.cancelError') || 'Error al cancelar')
-              }
-            }}
+            onClick={() => setShowCancelDialog(true)}
           >
-            {t('common.cancel')}
+            <X className="h-4 w-4 mr-2" />
+            {t('common.cancel') || 'Cancelar Viaje'}
           </Button>
         )}
       </div>
+
+      <CancelTripDialog
+        open={showCancelDialog}
+        onOpenChange={setShowCancelDialog}
+        onConfirm={async (reason) => {
+          if (!trip) return
+          try {
+            setIsCancelling(true)
+            await api.cancelTrip(trip.id, reason)
+            toast.success(t('passenger.tripCancelled') || 'Viaje cancelado exitosamente')
+            navigate('/passenger/trips')
+          } catch (error: any) {
+            toast.error(error.message || t('passenger.cancelError') || 'Error al cancelar el viaje')
+          } finally {
+            setIsCancelling(false)
+          }
+        }}
+        tripNumber={trip.tripNumber}
+        isLoading={isCancelling}
+      />
     </div>
   )
 }

@@ -181,6 +181,7 @@ export async function getTripById(tripId: string) {
           phone: true,
           avatar: true,
           country: true,
+          stellarAddress: true,
         },
       },
       vehicle: {
@@ -409,27 +410,18 @@ export async function assignDriver(tripId: string, driverId: string, vehicleId?:
 
 /**
  * Cancela un viaje
+ * Puede ser cancelado por pasajero, conductor o admin
+ * Maneja pagos pendientes, liberación de vehículos y notificaciones
  */
-export async function cancelTrip(tripId: string, reason?: string) {
-  // Primero obtener el viaje para acceder a sus notas
+export async function cancelTrip(
+  tripId: string,
+  cancelledBy: string,
+  reason?: string,
+  cancelledByRole?: 'PASSENGER' | 'DRIVER' | 'ADMIN'
+) {
+  // Obtener el viaje completo con relaciones
   const existingTrip = await prisma.trip.findUnique({
     where: { id: tripId },
-    select: { notes: true },
-  })
-
-  const updateData: any = {
-    status: 'CANCELLED',
-  }
-
-  if (reason) {
-    updateData.notes = existingTrip?.notes
-      ? `${existingTrip.notes}\nCancelado: ${reason}`.trim()
-      : `Cancelado: ${reason}`
-  }
-
-  const trip = await prisma.trip.update({
-    where: { id: tripId },
-    data: updateData,
     include: {
       passenger: {
         select: {
@@ -445,10 +437,187 @@ export async function cancelTrip(tripId: string, reason?: string) {
           email: true,
         },
       },
+      vehicle: {
+        select: {
+          id: true,
+          isAvailable: true,
+        },
+      },
+      payments: {
+        where: {
+          status: {
+            in: ['PENDING', 'PROCESSING'],
+          },
+        },
+      },
     },
   })
 
-  return trip
+  if (!existingTrip) {
+    throw new Error('Viaje no encontrado')
+  }
+
+  // Validar que el viaje no esté ya cancelado o completado
+  if (existingTrip.status === 'CANCELLED') {
+    throw new Error('El viaje ya está cancelado')
+  }
+
+  if (existingTrip.status === 'COMPLETED') {
+    throw new Error('No se puede cancelar un viaje completado')
+  }
+
+  // Validar permisos según el rol
+  if (cancelledByRole === 'PASSENGER' && existingTrip.passengerId !== cancelledBy) {
+    throw new Error('No tienes permiso para cancelar este viaje')
+  }
+
+  if (cancelledByRole === 'DRIVER' && existingTrip.driverId !== cancelledBy) {
+    throw new Error('No tienes permiso para cancelar este viaje')
+  }
+
+  // Usar transacción para atomicidad
+  return await prisma.$transaction(async (tx) => {
+    // Actualizar el viaje
+    const cancelReason = reason
+      ? `Cancelado por ${cancelledByRole || 'sistema'}: ${reason}`
+      : `Cancelado por ${cancelledByRole || 'sistema'}`
+
+    const updateData: any = {
+      status: 'CANCELLED',
+      cancelledAt: new Date(),
+      cancelledBy: cancelledBy,
+      cancellationReason: reason || null,
+      notes: existingTrip.notes
+        ? `${existingTrip.notes}\n${cancelReason}`.trim()
+        : cancelReason,
+    }
+
+    const trip = await tx.trip.update({
+      where: { id: tripId },
+      data: updateData,
+      include: {
+        passenger: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        driver: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        vehicle: {
+          select: {
+            id: true,
+            make: true,
+            model: true,
+            licensePlate: true,
+          },
+        },
+      },
+    })
+
+    // Liberar vehículo si estaba asignado
+    if (existingTrip.vehicleId && existingTrip.vehicle) {
+      await tx.vehicle.update({
+        where: { id: existingTrip.vehicleId },
+        data: { isAvailable: true },
+      })
+    }
+
+    // Cancelar pagos pendientes
+    if (existingTrip.payments.length > 0) {
+      await tx.payment.updateMany({
+        where: {
+          tripId: tripId,
+          status: {
+            in: ['PENDING', 'PROCESSING'],
+          },
+        },
+        data: {
+          status: 'CANCELLED',
+          failureReason: 'Viaje cancelado',
+          processedAt: new Date(),
+        },
+      })
+    }
+
+    // Cancelar alertas de conductores pendientes
+    await tx.driverAlert.updateMany({
+      where: {
+        tripId: tripId,
+        status: 'PENDING',
+      },
+      data: {
+        status: 'CANCELLED',
+      },
+    })
+
+    // Crear notificaciones en background
+    setImmediate(async () => {
+      try {
+        const { createNotification } = await import('./notificationService')
+        const { NotificationType, NotificationPriority } = await import('@prisma/client')
+
+        const notifications = []
+
+        // Notificar al pasajero (si no fue él quien canceló)
+        if (existingTrip.passengerId && cancelledByRole !== 'PASSENGER') {
+          notifications.push({
+            userId: existingTrip.passengerId,
+            type: NotificationType.TRIP_CANCELLED,
+            title: 'Viaje cancelado',
+            message: cancelledByRole === 'DRIVER'
+              ? `El conductor ha cancelado tu viaje ${existingTrip.tripNumber}${reason ? `: ${reason}` : ''}`
+              : `Tu viaje ${existingTrip.tripNumber} ha sido cancelado${reason ? `: ${reason}` : ''}`,
+            priority: NotificationPriority.HIGH,
+            data: {
+              tripId: tripId,
+              tripNumber: existingTrip.tripNumber,
+              cancelledBy: cancelledByRole,
+              reason,
+            },
+            actionUrl: `/passenger/trips/${tripId}`,
+            actionLabel: 'Ver detalles',
+          })
+        }
+
+        // Notificar al conductor (si no fue él quien canceló y estaba asignado)
+        if (existingTrip.driverId && cancelledByRole !== 'DRIVER') {
+          notifications.push({
+            userId: existingTrip.driverId,
+            type: NotificationType.TRIP_CANCELLED,
+            title: 'Viaje cancelado',
+            message: cancelledByRole === 'PASSENGER'
+              ? `El pasajero ha cancelado el viaje ${existingTrip.tripNumber}${reason ? `: ${reason}` : ''}`
+              : `El viaje ${existingTrip.tripNumber} ha sido cancelado${reason ? `: ${reason}` : ''}`,
+            priority: NotificationPriority.HIGH,
+            data: {
+              tripId: tripId,
+              tripNumber: existingTrip.tripNumber,
+              cancelledBy: cancelledByRole,
+              reason,
+            },
+            actionUrl: `/driver/trips/${tripId}`,
+            actionLabel: 'Ver detalles',
+          })
+        }
+
+        // Crear notificaciones
+        await Promise.all(
+          notifications.map(n => createNotification(n).catch(() => null))
+        )
+      } catch (error) {
+        console.error('Error creando notificaciones de cancelación:', error)
+      }
+    })
+
+    return trip
+  })
 }
 
 /**

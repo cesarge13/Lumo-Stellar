@@ -8,13 +8,14 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { MapPin, Clock, Users, ArrowLeft, Navigation, CheckCircle, Play, Map as MapIcon, AlertCircle, MessageCircle } from 'lucide-react'
+import { MapPin, Clock, Users, ArrowLeft, Navigation, CheckCircle, Play, Map as MapIcon, AlertCircle, MessageCircle, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useCurrency } from '@/hooks/useCurrency'
 import type { Trip } from '@/types'
 import { TripStatus } from '@/types'
 import { StartTripDialog } from '@/components/trips/StartTripDialog'
 import { generateArrivalMessage, openWhatsApp } from '@/utils/whatsapp'
+import { CancelTripDialog } from '@/components/trips/CancelTripDialog'
 
 export default function DriverTrips() {
   const { t } = useTranslation()
@@ -31,6 +32,8 @@ export default function DriverTrips() {
   const [search, setSearch] = useState('')
   const [formattedPrices, setFormattedPrices] = useState<Record<string, string>>({})
   const [selectedTripPrice, setSelectedTripPrice] = useState<string>('')
+  const [showCancelDialog, setShowCancelDialog] = useState(false)
+  const [isCancelling, setIsCancelling] = useState(false)
 
   useEffect(() => {
     if (!user) {
@@ -400,9 +403,43 @@ export default function DriverTrips() {
                   }
                 />
               )}
+              {(selectedTrip.status === TripStatus.PENDING || 
+                selectedTrip.status === TripStatus.CONFIRMED || 
+                selectedTrip.status === TripStatus.IN_PROGRESS) && (
+                <Button
+                  variant="destructive"
+                  className="w-full"
+                  onClick={() => setShowCancelDialog(true)}
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  {t('common.cancel') || 'Cancelar Viaje'}
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
+
+        <CancelTripDialog
+          open={showCancelDialog}
+          onOpenChange={setShowCancelDialog}
+          onConfirm={async (reason) => {
+            if (!selectedTrip) return
+            try {
+              setIsCancelling(true)
+              await api.cancelDriverTrip(selectedTrip.id, reason)
+              toast.success(t('driver.tripCancelled') || 'Viaje cancelado exitosamente')
+              setSelectedTrip(null)
+              navigate('/driver/trips')
+              loadTrips()
+            } catch (error: any) {
+              toast.error(error.message || t('driver.cancelError') || 'Error al cancelar el viaje')
+            } finally {
+              setIsCancelling(false)
+            }
+          }}
+          tripNumber={selectedTrip.tripNumber}
+          isLoading={isCancelling}
+        />
       </div>
     )
   }

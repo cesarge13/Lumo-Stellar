@@ -16,6 +16,7 @@ import { toast } from 'sonner'
 import { TripTrackingMap } from '@/components/maps/TripTrackingMap'
 import { useCurrency } from '@/hooks/useCurrency'
 import { generateTripSummaryMessage, openWhatsApp } from '@/utils/whatsapp'
+import { StellarPaymentQR } from '@/components/payments/StellarPaymentQR'
 import type { Trip } from '@/types'
 import { TripStatus } from '@/types'
 
@@ -31,6 +32,12 @@ export default function DriverTripTracking() {
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lon: number } | null>(null)
   const [locationError, setLocationError] = useState<string | null>(null)
   const [formattedPrice, setFormattedPrice] = useState<string>('')
+  const [paymentInfo, setPaymentInfo] = useState<{
+    paymentId: string
+    paymentQR: string
+    paymentAddress: string
+    transactionXdr?: string
+  } | null>(null)
 
   useEffect(() => {
     if (!user || !id) {
@@ -67,6 +74,40 @@ export default function DriverTripTracking() {
       if (data) {
         const formatted = await formatConvertedAmount(data.totalPrice, data.currency)
         setFormattedPrice(formatted)
+        
+        // Si el viaje está completado pero tiene QR de pago, cargar información de pago
+        if (data?.completedAt && data?.paymentQrCode) {
+          try {
+            const paymentData = await api.getTripPaymentInfo(id)
+            if (paymentData.payment) {
+              setPaymentInfo({
+                paymentId: paymentData.payment.id,
+                paymentQR: data.paymentQrCode || '',
+                paymentAddress: data.paymentAddress || '',
+                transactionXdr: paymentData.trip.transactionXdr,
+              })
+            } else {
+              setPaymentInfo({
+                paymentId: 'pending',
+                paymentQR: data.paymentQrCode || '',
+                paymentAddress: data.paymentAddress || '',
+                transactionXdr: paymentData.trip.transactionXdr,
+              })
+            }
+          } catch (error) {
+            console.error('Error loading payment info:', error)
+            if (data.paymentQrCode && data.paymentAddress) {
+              setPaymentInfo({
+                paymentId: 'pending',
+                paymentQR: data.paymentQrCode,
+                paymentAddress: data.paymentAddress,
+                transactionXdr: undefined,
+              })
+            }
+          }
+        } else {
+          setPaymentInfo(null)
+        }
       }
     } catch (error) {
       console.error('Error loading trip:', error)
@@ -127,6 +168,38 @@ export default function DriverTripTracking() {
       // Actualizar el trip local con los datos completos
       if (completedTrip) {
         setTrip(completedTrip)
+        
+        // Cargar información de pago si hay QR
+        if (completedTrip.paymentQrCode) {
+          try {
+            const paymentData = await api.getTripPaymentInfo(id)
+            if (paymentData.payment) {
+              setPaymentInfo({
+                paymentId: paymentData.payment.id,
+                paymentQR: completedTrip.paymentQrCode || '',
+                paymentAddress: completedTrip.paymentAddress || '',
+                transactionXdr: paymentData.trip.transactionXdr,
+              })
+            } else {
+              setPaymentInfo({
+                paymentId: 'pending',
+                paymentQR: completedTrip.paymentQrCode || '',
+                paymentAddress: completedTrip.paymentAddress || '',
+                transactionXdr: paymentData.trip.transactionXdr,
+              })
+            }
+          } catch (error) {
+            console.error('Error loading payment info:', error)
+            if (completedTrip.paymentQrCode && completedTrip.paymentAddress) {
+              setPaymentInfo({
+                paymentId: 'pending',
+                paymentQR: completedTrip.paymentQrCode,
+                paymentAddress: completedTrip.paymentAddress,
+                transactionXdr: undefined,
+              })
+            }
+          }
+        }
       }
     } catch (error: any) {
       console.error('Error completing trip:', error)
@@ -288,6 +361,35 @@ export default function DriverTripTracking() {
                     {t('driver.locationEnabled') || 'Ubicación GPS activa'}
                   </p>
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* QR de Pago Stellar - Mostrar al conductor después de completar el viaje */}
+          {trip.completedAt && trip.paymentQrCode && trip.status !== 'COMPLETED' && paymentInfo && (
+            <Card className="border-primary bg-primary/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5" />
+                  {t('driver.paymentQR') || 'Código QR para Recibir Pago'}
+                </CardTitle>
+                <CardDescription>
+                  {t('driver.paymentQRDescription') || 'Muestra este código QR al pasajero para que pueda realizar el pago con Freighter'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <StellarPaymentQR
+                  paymentQR={paymentInfo.paymentQR}
+                  paymentAddress={paymentInfo.paymentAddress}
+                  amount={trip.totalPrice}
+                  currency={trip.currency}
+                  paymentId={paymentInfo.paymentId}
+                  transactionXdr={paymentInfo.transactionXdr}
+                  onPaymentVerified={() => {
+                    // Recargar el viaje después del pago
+                    loadTrip()
+                  }}
+                />
               </CardContent>
             </Card>
           )}
