@@ -1,3 +1,9 @@
+# Lumo-Stellar
+
+**LUMO usa Stellar para pagos rápidos, seguros y globales, eliminando intermediarios y ofreciendo una experiencia moderna para pasajeros y conductores.**
+
+---
+
 # Lumo - Aplicación de Producción
 
 Este es el proyecto de producción para **lumo.peranto.app**, duplicado desde el proyecto operations con configuraciones separadas.
