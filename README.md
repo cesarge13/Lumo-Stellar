@@ -6,7 +6,7 @@
 
 # Lumo - Aplicación de Producción
 
-Este es el proyecto de producción para **lumo.peranto.app**, duplicado desde el proyecto operations con configuraciones separadas.
+Este es el proyecto de producción para LUMO, una plataforma de transporte con pagos Stellar.
 
 ## 🏗️ Estructura del Proyecto
 
@@ -68,8 +68,8 @@ Este proyecto usa bases de datos completamente separadas del proyecto operations
 
 ### Dominio
 
-- **Producción**: `https://lumo.peranto.app`
-- **API**: `https://lumo.peranto.app/api`
+- **Producción**: Configurar en variables de entorno
+- **API**: Configurar en variables de entorno (`VITE_API_URL`)
 
 ### SSL/HTTPS
 
@@ -113,14 +113,14 @@ yarn docker:logs      # Ver logs
 - Ver documentación en `backend/README.md` para más detalles del backend
 - Ver documentación en `frontend/README.md` para más detalles del frontend
 
-## 🔄 Diferencias con Operations
+## 🔄 Características
 
 Este proyecto está configurado para producción con:
 
 - Bases de datos separadas (PostgreSQL y MinIO)
-- Dominio diferente (`lumo.peranto.app`)
+- Integración con Stellar para pagos
 - Configuración de producción optimizada
-- Sin servicios de desarrollo (website, ghost, etc.)
+- Arquitectura escalable con Docker
 
 
 

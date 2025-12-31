@@ -55,7 +55,7 @@ services:
       target: ${FRONTEND_TARGET:-production}
       args:
         - NODE_ENV=${NODE_ENV:-production}
-        - VITE_API_URL=${VITE_API_URL:-http://lumo.peranto.app/api}
+        - VITE_API_URL=${VITE_API_URL}
         - VITE_GOOGLE_MAPS_API_KEY=${VITE_GOOGLE_MAPS_API_KEY}
     container_name: lumo-frontend
     restart: unless-stopped
@@ -63,7 +63,7 @@ services:
       - ../.env
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      VITE_API_URL: ${VITE_API_URL:-http://lumo.peranto.app/api}
+      VITE_API_URL: ${VITE_API_URL}
       VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY}
     networks:
       - lumo-network
@@ -72,7 +72,6 @@ services:
 
   # Nginx Reverse Proxy
   # NOTA: Este Nginx corre solo internamente (sin exponer puertos 80/443)
-  # El Nginx de operations debe hacer proxy a este contenedor cuando detecte lumo.peranto.app
   # Para hacerlo directamente accesible, descomenta los puertos y usa puertos alternativos:
   # ports:
   #   - "8080:80"   # HTTP alternativo
